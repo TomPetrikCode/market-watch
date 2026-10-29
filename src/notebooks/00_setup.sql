@@ -6,3 +6,13 @@
 -- COMMAND ----------
 
 CREATE SCHEMA IF NOT EXISTS workspace.market_watch;
+
+CREATE TABLE IF NOT EXISTS workspace.market_watch.app_config (
+  key STRING, value STRING, updated_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS workspace.market_watch.bronze_watchlist (
+  ticker STRING, asset_type STRING, is_active STRING,
+  alert_1d_pct STRING, alert_from_high_pct STRING, note STRING,
+  _source STRING, _ingested_at TIMESTAMP
+);
