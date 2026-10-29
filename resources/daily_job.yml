@@ -1,0 +1,11 @@
+# Phase 2: daily pipeline job (tasks, schedule, notifications).
+resources:
+  jobs:
+    market_watch_daily:
+      name: market_watch_daily
+      tasks: []
+      # schedule:
+      #   quartz_cron_expression: "0 30 23 ? * MON-FRI"
+      #   timezone_id: Europe/Prague
+      # email_notifications:
+      #   on_failure: [you@example.com]

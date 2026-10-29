@@ -1,0 +1,14 @@
+# Phase 2: Databricks Asset Bundle – job as code.
+# Validate/deploy: databricks bundle validate / databricks bundle deploy
+bundle:
+  name: market-watch
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true
+    # workspace:
+    #   host: https://<your-workspace>.cloud.databricks.com
