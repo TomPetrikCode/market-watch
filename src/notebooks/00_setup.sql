@@ -16,3 +16,10 @@ CREATE TABLE IF NOT EXISTS workspace.market_watch.bronze_watchlist (
   alert_1d_pct STRING, alert_from_high_pct STRING, note STRING,
   _source STRING, _ingested_at TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS workspace.market_watch.bronze_prices (
+  ticker STRING, date DATE,
+  open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, adj_close DOUBLE,
+  volume BIGINT, currency STRING,
+  _source STRING, _ingested_at TIMESTAMP
+);
