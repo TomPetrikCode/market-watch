@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "6"
+# ///
 # MAGIC %md
 # MAGIC # 10_silver
 # MAGIC bronze → silver: typovaná, vyčištěná data v USD
@@ -38,8 +42,8 @@ silver_wl = wl_latest.select(
     F.upper(F.trim("ticker")).alias("ticker"),
     F.lower(F.trim("asset_type")).alias("asset_type"),
     F.lower(F.trim("is_active")).isin("true", "1", "yes", "y", "ano", "x").alias("is_active"),
-    F.trim("alert_1d_pct").cast("double").alias("alert_1d_pct"),
-    F.trim("alert_from_high_pct").cast("double").alias("alert_from_high_pct"),
+    F.expr("try_cast(trim(alert_1d_pct) AS double)").alias("alert_1d_pct"),
+    F.expr("try_cast(trim(alert_from_high_pct) AS double)").alias("alert_from_high_pct"),
     F.trim("note").alias("note"),
 )
 
@@ -77,8 +81,11 @@ display(silver_fx.groupBy("currency").agg(
 # COMMAND ----------
 
 # 3a) jen akcie/ETF/krypto (bez FX párů)
-#     krypto se obchoduje 24/7 → dnešní svíčka je nedokončená, vyhodíme ji
-is_crypto = F.col("ticker").endswith("-USD")
+#     krypto (podle asset_type z watchlistu) se obchoduje 24/7 → dnešní svíčka je nedokončená
+crypto_tickers = [
+    r["ticker"] for r in silver_wl.filter(F.col("asset_type") == "crypto").select("ticker").collect()
+]
+is_crypto = F.col("ticker").isin(crypto_tickers)
 
 assets = (
     prices.filter(~F.col("ticker").endswith("USD=X"))
