@@ -23,3 +23,6 @@ GOLD_ALERTS = table("gold_alerts")
 # Benchmark for relative strength and pairs for rolling correlation
 BENCHMARK = "SPY"
 CORRELATION_PAIRS = [("BTC-USD", "ETH-USD"), ("ETH-USD", "BMNR")]
+
+# is_volatile: 20d volatility above this multiple of its own 1y average
+VOL_SPIKE_MULTIPLIER = 1.5
