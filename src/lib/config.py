@@ -26,3 +26,11 @@ CORRELATION_PAIRS = [("BTC-USD", "ETH-USD"), ("ETH-USD", "BMNR")]
 
 # is_volatile: 20d volatility above this multiple of its own 1y average
 VOL_SPIKE_MULTIPLIER = 1.5
+
+
+# Data quality (30_dq_checks)
+DQ_RESULTS = table("dq_results")
+DQ_MAX_STALE_DAYS = {"crypto": 2, "default": 4}    # weekend + holiday for stocks
+DQ_MAX_DAILY_MOVE_PCT = 50                         # bigger 1d move on a non-crypto = suspicious
+DQ_RECENT_DAYS = 30                                # price validity checked on recent data only
+ALLOWED_ASSET_TYPES = ["stock", "etf", "crypto", "benchmark"]
