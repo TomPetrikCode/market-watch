@@ -17,4 +17,9 @@ SILVER_PRICES = table("silver_prices")
 SILVER_WATCHLIST = table("silver_watchlist")
 SILVER_FX = table("silver_fx")
 GOLD_METRICS = table("gold_metrics")
+GOLD_CORRELATIONS = table("gold_correlations")
 GOLD_ALERTS = table("gold_alerts")
+
+# Benchmark for relative strength and pairs for rolling correlation
+BENCHMARK = "SPY"
+CORRELATION_PAIRS = [("BTC-USD", "ETH-USD"), ("ETH-USD", "BMNR")]
