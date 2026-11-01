@@ -1,13 +1,14 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # 20_gold_metrics
-# MAGIC silver → gold: metriky pro dashboard a alerty
+# MAGIC silver → gold: metriky pro dashboard a alerty. Popis všech metrik: `docs/metrics.md`
 # MAGIC
-# MAGIC 1. `gold_metrics` – denně pro každý aktivní ticker: výnos, drawdown, MA50/200, relativní síla vs SPY
+# MAGIC 1. `gold_metrics` – denně pro každý aktivní ticker: výnosy, drawdown, trend, volatilita,
+# MAGIC    objem, výkon vs SPY
 # MAGIC 2. `gold_correlations` – klouzavá 90denní korelace denních výnosů pro páry z configu
 # MAGIC
 # MAGIC Cenové metriky se počítají v **lokální měně** (chování samotného aktiva, bez vlivu kurzu),
-# MAGIC relativní síla vs SPY v **USD** (aby byla srovnatelná).
+# MAGIC srovnání se SPY v **USD** (aby bylo srovnatelné).
 
 # COMMAND ----------
 
@@ -26,6 +27,7 @@ from lib.config import (
     GOLD_METRICS,
     SILVER_PRICES,
     SILVER_WATCHLIST,
+    VOL_SPIKE_MULTIPLIER,
 )
 
 # COMMAND ----------
@@ -36,52 +38,129 @@ from lib.config import (
 # COMMAND ----------
 
 watchlist = spark.table(SILVER_WATCHLIST).filter("is_active").select("ticker", "asset_type")
-prices = spark.table(SILVER_PRICES).join(watchlist, on="ticker", how="inner")
+
+prices = (
+    spark.table(SILVER_PRICES)
+    .join(watchlist, on="ticker", how="inner")
+    .withColumn("day", F.unix_date("date"))       # datum jako číslo dne → okna podle kalendáře
+)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2) gold_metrics
+# MAGIC ## 2) Okna
+# MAGIC - `rows`  = počet **obchodních dní** (řádků) – klouzavé průměry, volatilita, objem
+# MAGIC - `range` = počet **kalendářních dní** – týdenní/měsíční výnos, 52W maximum
+# MAGIC   (akcie i krypto pak měří stejné období, i když krypto obchoduje i o víkendu)
 
 # COMMAND ----------
 
-w = Window.partitionBy("ticker").orderBy("date")                       # pořadí dní v tickeru
-w_all = w.rowsBetween(Window.unboundedPreceding, Window.currentRow)  # od začátku po dnešek
-w50 = w.rowsBetween(-49, Window.currentRow)                          # posledních 50 řádků
-w200 = w.rowsBetween(-199, Window.currentRow)                        # posledních 200 řádků
+w = Window.partitionBy("ticker").orderBy("date")
+w_day = Window.partitionBy("ticker").orderBy("day")
 
 
-def moving_avg(col: str, window, n: int):
-    """Klouzavý průměr – jen když je k dispozici celých n dní, jinak NULL."""
+def rows(n: int):
+    """Posledních n obchodních dní včetně dneška."""
+    return w.rowsBetween(-(n - 1), Window.currentRow)
+
+
+def full_avg(col: str, n: int, window):
+    """Průměr přes okno – jen když je k dispozici celých n hodnot, jinak NULL."""
     return F.when(F.count(col).over(window) == n, F.avg(col).over(window))
 
 
-# benchmark (SPY) v USD po dnech; krypto má i víkendy → doplníme poslední známou hodnotu
-spy = (
-    spark.table(SILVER_PRICES)
-    .filter(F.col("ticker") == BENCHMARK)
-    .select("date", F.col("adj_close_usd").alias("spy_usd"))
+def price_days_ago(col: str, days: int):
+    """Poslední známá cena k datu před `days` kalendářními dny (víkend → pátek)."""
+    return F.last(col, ignorenulls=True).over(w_day.rangeBetween(Window.unboundedPreceding, -days))
+
+
+def pct_change(new, old):
+    """(new / old − 1) × 100; NULL, když stará hodnota chybí nebo je 0."""
+    return (F.try_divide(new, old) - 1) * 100
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 3) gold_metrics
+
+# COMMAND ----------
+
+# --- pohyb ceny ----------------------------------------------------------------------------
+m = (
+    prices
+    .withColumn("ret_1d_pct", pct_change(F.col("adj_close"), F.lag("adj_close").over(w)))
+    .withColumn("ret_1w_pct", pct_change(F.col("adj_close"), price_days_ago("adj_close", 7)))
+    .withColumn("ret_1m_pct", pct_change(F.col("adj_close"), price_days_ago("adj_close", 30)))
 )
 
-gold_metrics = (
-    prices
-    # denní výnos v %
-    .withColumn("ret_1d_pct", (F.col("adj_close") / F.lag("adj_close").over(w) - 1) * 100)
-    # vzdálenost od dosavadního maxima v % (0 nebo záporné)
-    .withColumn("drawdown_pct", (F.col("adj_close") / F.max("adj_close").over(w_all) - 1) * 100)
-    # klouzavé průměry a trend
-    .withColumn("ma50", moving_avg("adj_close", w50, 50))
-    .withColumn("ma200", moving_avg("adj_close", w200, 200))
+# --- pokles od maxima ----------------------------------------------------------------------
+m = (
+    m
+    .withColumn("high_52w", F.max("adj_close").over(w_day.rangeBetween(-364, Window.currentRow)))
+    .withColumn("high_ath", F.max("adj_close").over(w.rowsBetween(Window.unboundedPreceding, 0)))
+    .withColumn("drawdown_52w_pct", pct_change(F.col("adj_close"), F.col("high_52w")))
+    .withColumn("drawdown_ath_pct", pct_change(F.col("adj_close"), F.col("high_ath")))
+)
+
+# --- trend ---------------------------------------------------------------------------------
+m = (
+    m
+    .withColumn("ma50", full_avg("adj_close", 50, rows(50)))
+    .withColumn("ma200", full_avg("adj_close", 200, rows(200)))
+    .withColumn("pct_vs_ma50", pct_change(F.col("adj_close"), F.col("ma50")))
+    .withColumn("pct_vs_ma200", pct_change(F.col("adj_close"), F.col("ma200")))
     .withColumn("above_ma200", F.col("adj_close") > F.col("ma200"))
-    # relativní síla: cena v USD / SPY v USD (roste = ticker je lepší než trh)
-    .join(spy, on="date", how="left")
-    .withColumn("spy_usd", F.last("spy_usd", ignorenulls=True).over(w_all))
-    .withColumn("rs_vs_spy", F.col("adj_close_usd") / F.col("spy_usd"))
-    .select(
-        "ticker", "date", "asset_type", "currency",
-        "adj_close", "adj_close_usd",
-        "ret_1d_pct", "drawdown_pct", "ma50", "ma200", "above_ma200", "rs_vs_spy",
+)
+
+# --- volatilita ----------------------------------------------------------------------------
+# denní směrodatná odchylka výnosů × √(obchodních dní v roce) → roční volatilita v %
+trading_days = F.when(F.col("asset_type") == "crypto", F.lit(365)).otherwise(F.lit(252))
+
+m = (
+    m
+    .withColumn(
+        "vol_20d_pct",
+        F.when(
+            F.count("ret_1d_pct").over(rows(20)) == 20,
+            F.stddev("ret_1d_pct").over(rows(20)) * F.sqrt(trading_days),
+        ),
     )
+    .withColumn("vol_baseline_pct", full_avg("vol_20d_pct", 252, rows(252)))  # normál za rok
+    .withColumn(
+        "is_volatile",
+        F.col("vol_20d_pct") > F.col("vol_baseline_pct") * F.lit(VOL_SPIKE_MULTIPLIER),
+    )
+)
+
+# --- objem ---------------------------------------------------------------------------------
+avg_volume_20d = full_avg("volume", 20, w.rowsBetween(-20, -1))   # 20 předchozích dní, bez dneška
+m = m.withColumn("volume_ratio", F.try_divide(F.col("volume"), avg_volume_20d))
+
+# --- výkon vs SPY za 3 měsíce (v USD) -----------------------------------------------------
+m = m.withColumn("ret_3m_usd_pct", pct_change(F.col("adj_close_usd"), price_days_ago("adj_close_usd", 91)))
+
+spy_3m = (
+    m.filter(F.col("ticker") == BENCHMARK)
+    .select("date", F.col("ret_3m_usd_pct").alias("spy_ret_3m_pct"))
+)
+
+m = (
+    m.join(spy_3m, on="date", how="left")
+    # krypto o víkendu: SPY neobchoduje → vezmi poslední známou hodnotu
+    .withColumn("spy_ret_3m_pct", F.last("spy_ret_3m_pct", ignorenulls=True).over(
+        w.rowsBetween(Window.unboundedPreceding, 0)))
+    .withColumn("rel_3m_vs_spy_pct", F.col("ret_3m_usd_pct") - F.col("spy_ret_3m_pct"))
+)
+
+gold_metrics = m.select(
+    "ticker", "date", "asset_type", "currency", "adj_close", "adj_close_usd", "volume",
+    "ret_1d_pct", "ret_1w_pct", "ret_1m_pct",
+    "drawdown_52w_pct", "drawdown_ath_pct",
+    "ma50", "ma200", "pct_vs_ma50", "pct_vs_ma200", "above_ma200",
+    "vol_20d_pct", "vol_baseline_pct", "is_volatile",
+    "volume_ratio",
+    "rel_3m_vs_spy_pct",
 )
 
 gold_metrics.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(GOLD_METRICS)
@@ -89,7 +168,7 @@ gold_metrics.write.mode("overwrite").option("overwriteSchema", "true").saveAsTab
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 3) gold_correlations
+# MAGIC ## 4) gold_correlations
 
 # COMMAND ----------
 
@@ -145,12 +224,14 @@ display(
     gm.join(last_day, on=["ticker", "date"])
     .select(
         "ticker", "date",
-        F.round("ret_1d_pct", 2).alias("ret_1d_pct"),
-        F.round("drawdown_pct", 2).alias("drawdown_pct"),
-        "above_ma200",
-        F.round("rs_vs_spy", 4).alias("rs_vs_spy"),
+        *[F.round(c, 2).alias(c) for c in [
+            "ret_1d_pct", "ret_1w_pct", "ret_1m_pct", "drawdown_52w_pct", "drawdown_ath_pct",
+            "pct_vs_ma50", "pct_vs_ma200", "vol_20d_pct", "vol_baseline_pct", "volume_ratio",
+            "rel_3m_vs_spy_pct",
+        ]],
+        "above_ma200", "is_volatile",
     )
-    .orderBy("drawdown_pct")
+    .orderBy("drawdown_52w_pct")
 )
 
 # COMMAND ----------
