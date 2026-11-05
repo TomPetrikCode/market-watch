@@ -34,3 +34,6 @@ DQ_MAX_STALE_DAYS = {"crypto": 2, "default": 4}    # weekend + holiday for stock
 DQ_MAX_DAILY_MOVE_PCT = 50                         # bigger 1d move on a non-crypto = suspicious
 DQ_RECENT_DAYS = 30                                # price validity checked on recent data only
 ALLOWED_ASSET_TYPES = ["stock", "etf", "crypto", "benchmark"]
+
+# Alerts (40_alerts)
+ALERT_LOOKBACK_DAYS = 7   # re-evaluate last N days, so a missed job run does not lose an alert

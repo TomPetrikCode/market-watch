@@ -23,3 +23,9 @@ CREATE TABLE IF NOT EXISTS workspace.market_watch.bronze_prices (
   volume BIGINT, currency STRING,
   _source STRING, _ingested_at TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS workspace.market_watch.gold_alerts (
+  ticker STRING, date DATE, alert_type STRING,
+  value_pct DOUBLE, threshold_pct DOUBLE, message STRING,
+  detected_at TIMESTAMP
+);
