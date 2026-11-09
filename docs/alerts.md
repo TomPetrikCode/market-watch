@@ -12,7 +12,10 @@ Code: [`src/notebooks/40_alerts.py`](../src/notebooks/40_alerts.py).
 | `drawdown_52w` | `drawdown_52w_pct` **crosses** `alert_from_high_pct` (yesterday above, today at/below) | once per crossing |
 | `volatility_spike` | `is_volatile` **turns on** (yesterday false, today true) | once per spike |
 
-Tickers without thresholds (e.g. the SPY benchmark) get no price alerts.
+Tickers without thresholds (e.g. the SPY benchmark) get no `drop_1d` or `drawdown_52w` alerts.
+`volatility_spike` needs no threshold (each asset is compared with its own normal), so SPY gets it too –
+on purpose: a volatility spike on SPY means the whole market is nervous, which tells you whether
+a drop in your stocks is market-wide or company-specific.
 
 ## Design decisions
 

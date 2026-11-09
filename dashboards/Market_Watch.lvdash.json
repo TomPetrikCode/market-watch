@@ -1,0 +1,1702 @@
+{
+  "datasets": [
+    {
+      "name": "d81999c2",
+      "displayName": "alerts_kpi",
+      "queryLines": [
+        "SELECT\r\n",
+        "  COUNT_IF(detected_at >= current_date())            AS alerts_today,\r\n",
+        "  COUNT_IF(date >= date_sub(current_date(), 7))      AS alerts_7d\r\n",
+        "FROM workspace.market_watch.gold_alerts"
+      ]
+    },
+    {
+      "name": "ef232e03",
+      "displayName": "alerts_history",
+      "queryLines": [
+        "SELECT date, ticker, alert_type,\r\n",
+        "       ROUND(value_pct, 1) AS value_pct, ROUND(threshold_pct, 1) AS threshold_pct,\r\n",
+        "       message, detected_at\r\n",
+        "FROM workspace.market_watch.gold_alerts"
+      ]
+    },
+    {
+      "name": "765ec642",
+      "displayName": "dq_last_run",
+      "queryLines": [
+        "SELECT run_at, check_name, severity, status, failed_count, sample\r\n",
+        "FROM workspace.market_watch.dq_results\r\n",
+        "WHERE run_at = (SELECT MAX(run_at) FROM workspace.market_watch.dq_results)"
+      ]
+    },
+    {
+      "name": "c11367ad",
+      "displayName": "dq_kpi",
+      "queryLines": [
+        "SELECT\r\n",
+        "  MAX(run_at)                                           AS last_run,\r\n",
+        "  COUNT_IF(status = 'FAIL' AND severity = 'ERROR')      AS errors,\r\n",
+        "  COUNT_IF(status = 'FAIL' AND severity = 'WARN')       AS warnings\r\n",
+        "FROM workspace.market_watch.dq_results\r\n",
+        "WHERE run_at = (SELECT MAX(run_at) FROM workspace.market_watch.dq_results)"
+      ]
+    },
+    {
+      "name": "686a5fdf",
+      "displayName": "correlations",
+      "queryLines": [
+        "SELECT date, concat(ticker_a, ' × ', ticker_b) AS pair, ROUND(corr_90d, 2) AS corr_90d\r\n",
+        "FROM workspace.market_watch.gold_correlations\r\n",
+        "WHERE corr_90d IS NOT NULL\r\n",
+        "  AND date >= add_months(current_date(), -24)"
+      ]
+    },
+    {
+      "name": "a5e97ea9",
+      "displayName": "watchlist_latest",
+      "queryLines": [
+        "WITH last AS (\r\n",
+        "  SELECT ticker, MAX(date) AS max_date\r\n",
+        "  FROM workspace.market_watch.gold_metrics\r\n",
+        "  GROUP BY ticker\r\n",
+        ")\r\n",
+        "SELECT\r\n",
+        "  g.ticker, w.note AS name, g.asset_type, g.date,\r\n",
+        "  ROUND(g.adj_close, 2)          AS price,\r\n",
+        "  g.currency,\r\n",
+        "  ROUND(g.ret_1d_pct, 2)         AS ret_1d_pct,\r\n",
+        "  ROUND(g.ret_1w_pct, 2)         AS ret_1w_pct,\r\n",
+        "  ROUND(g.ret_1m_pct, 2)         AS ret_1m_pct,\r\n",
+        "  ROUND(g.drawdown_52w_pct, 2)   AS drawdown_52w_pct,\r\n",
+        "  ROUND(g.pct_vs_ma200, 2)       AS pct_vs_ma200,\r\n",
+        "  ROUND(g.rel_3m_vs_spy_pct, 2)  AS rel_3m_vs_spy_pct,\r\n",
+        "  ROUND(g.volume_ratio, 2)       AS volume_ratio,\r\n",
+        "  g.above_ma200, g.is_volatile\r\n",
+        "FROM workspace.market_watch.gold_metrics g\r\n",
+        "JOIN last l ON g.ticker = l.ticker AND g.date = l.max_date\r\n",
+        "JOIN workspace.market_watch.silver_watchlist w ON g.ticker = w.ticker\r\n",
+        "WHERE w.is_active"
+      ]
+    },
+    {
+      "name": "7f56607b",
+      "displayName": "overview_kpi",
+      "queryLines": [
+        "WITH last AS (\r\n",
+        "  SELECT ticker, MAX(date) AS max_date\r\n",
+        "  FROM workspace.market_watch.gold_metrics\r\n",
+        "  GROUP BY ticker\r\n",
+        ")\r\n",
+        "SELECT\r\n",
+        "  COUNT(*)                                     AS tickers,\r\n",
+        "  COUNT_IF(NOT g.above_ma200)                  AS below_ma200,\r\n",
+        "  COUNT_IF(g.is_volatile)                      AS volatile_now,\r\n",
+        "  datediff(current_date(), MIN(g.date))        AS data_age_days\r\n",
+        "FROM workspace.market_watch.gold_metrics g\r\n",
+        "JOIN last l ON g.ticker = l.ticker AND g.date = l.max_date"
+      ]
+    },
+    {
+      "name": "281d9035",
+      "displayName": "ticker_history",
+      "queryLines": [
+        "SELECT\r\n",
+        "  ticker, date,\r\n",
+        "  ROUND(adj_close, 2)          AS price,\r\n",
+        "  ROUND(ma50, 2)               AS ma50,\r\n",
+        "  ROUND(ma200, 2)              AS ma200,\r\n",
+        "  ROUND(drawdown_52w_pct, 2)   AS drawdown_52w_pct,\r\n",
+        "  ROUND(rel_3m_vs_spy_pct, 2)  AS rel_3m_vs_spy_pct,\r\n",
+        "  ROUND(vol_20d_pct, 1)        AS vol_20d_pct,\r\n",
+        "  ROUND(vol_baseline_pct, 1)   AS vol_baseline_pct\r\n",
+        "FROM workspace.market_watch.gold_metrics\r\n",
+        "WHERE date >= add_months(current_date(), -36)"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "999b67b9",
+      "displayName": "Overview",
+      "layout": [
+        {
+          "widget": {
+            "name": "alerts-today",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "d81999c2",
+                  "fields": [
+                    {
+                      "name": "sum(alerts_today)",
+                      "expression": "SUM(`alerts_today`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Alerts today",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(alerts_today)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "below-ma200",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "7f56607b",
+                  "fields": [
+                    {
+                      "name": "sum(below_ma200)",
+                      "expression": "SUM(`below_ma200`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Below MA200",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(below_ma200)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "4aa4615e",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "7f56607b",
+                  "fields": [
+                    {
+                      "name": "sum(volatile_now)",
+                      "expression": "SUM(`volatile_now`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Volatile now",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(volatile_now)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "763b2412",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "7f56607b",
+                  "fields": [
+                    {
+                      "name": "sum(data_age_days)",
+                      "expression": "SUM(`data_age_days`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Data age (days)",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(data_age_days)",
+                  "style": {
+                    "rules": [
+                      {
+                        "condition": {
+                          "operand": {
+                            "type": "data-value",
+                            "value": "5"
+                          },
+                          "operator": ">="
+                        },
+                        "fontColor": {
+                          "themeColorType": "visualizationColors",
+                          "position": 4
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "3m-performance-vs-sp500",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "a5e97ea9",
+                  "fields": [
+                    {
+                      "name": "ticker",
+                      "expression": "`ticker`"
+                    },
+                    {
+                      "name": "sum(rel_3m_vs_spy_pct)",
+                      "expression": "SUM(`rel_3m_vs_spy_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "3M performance vs S&P 500",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "ticker",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(rel_3m_vs_spy_pct)",
+                  "axis": {
+                    "title": "vs S&P 500 (pp)"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "2f3c831e",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "a5e97ea9",
+                  "fields": [
+                    {
+                      "name": "ticker",
+                      "expression": "`ticker`"
+                    },
+                    {
+                      "name": "sum(drawdown_52w_pct)",
+                      "expression": "SUM(`drawdown_52w_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Drawdown from 52W high",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "ticker",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y"
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(drawdown_52w_pct)",
+                  "axis": {
+                    "title": "Drawdown (%)"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "watchlist",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "a5e97ea9",
+                  "fields": [
+                    {
+                      "name": "ticker",
+                      "expression": "`ticker`"
+                    },
+                    {
+                      "name": "name",
+                      "expression": "`name`"
+                    },
+                    {
+                      "name": "price",
+                      "expression": "`price`"
+                    },
+                    {
+                      "name": "currency",
+                      "expression": "`currency`"
+                    },
+                    {
+                      "name": "ret_1d_pct",
+                      "expression": "`ret_1d_pct`"
+                    },
+                    {
+                      "name": "ret_1w_pct",
+                      "expression": "`ret_1w_pct`"
+                    },
+                    {
+                      "name": "ret_1m_pct",
+                      "expression": "`ret_1m_pct`"
+                    },
+                    {
+                      "name": "drawdown_52w_pct",
+                      "expression": "`drawdown_52w_pct`"
+                    },
+                    {
+                      "name": "pct_vs_ma200",
+                      "expression": "`pct_vs_ma200`"
+                    },
+                    {
+                      "name": "rel_3m_vs_spy_pct",
+                      "expression": "`rel_3m_vs_spy_pct`"
+                    },
+                    {
+                      "name": "volume_ratio",
+                      "expression": "`volume_ratio`"
+                    },
+                    {
+                      "name": "above_ma200",
+                      "expression": "`above_ma200`"
+                    },
+                    {
+                      "name": "is_volatile",
+                      "expression": "`is_volatile`"
+                    }
+                  ],
+                  "disaggregated": true,
+                  "orders": [
+                    {
+                      "direction": "ASC",
+                      "expression": "`pct_vs_ma200`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Watchlist",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "ticker"
+                  },
+                  {
+                    "fieldName": "name"
+                  },
+                  {
+                    "fieldName": "price"
+                  },
+                  {
+                    "fieldName": "currency"
+                  },
+                  {
+                    "fieldName": "ret_1d_pct",
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "0"
+                            },
+                            "operator": "<"
+                          },
+                          "backgroundColor": {
+                            "themeColorType": "visualizationColors",
+                            "position": 4
+                          }
+                        },
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "0"
+                            },
+                            "operator": ">"
+                          },
+                          "backgroundColor": "#00A972"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "fieldName": "ret_1w_pct",
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "0"
+                            },
+                            "operator": "<"
+                          },
+                          "backgroundColor": {
+                            "themeColorType": "visualizationColors",
+                            "position": 4
+                          }
+                        },
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "0"
+                            },
+                            "operator": ">"
+                          },
+                          "backgroundColor": "#00A972"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "fieldName": "ret_1m_pct",
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "0"
+                            },
+                            "operator": ">"
+                          },
+                          "backgroundColor": "#00A972"
+                        },
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "0"
+                            },
+                            "operator": "<"
+                          },
+                          "backgroundColor": {
+                            "themeColorType": "visualizationColors",
+                            "position": 4
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "fieldName": "drawdown_52w_pct"
+                  },
+                  {
+                    "fieldName": "pct_vs_ma200",
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "0"
+                            },
+                            "operator": ">"
+                          },
+                          "backgroundColor": "#00A972"
+                        },
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "0"
+                            },
+                            "operator": "<"
+                          },
+                          "backgroundColor": {
+                            "themeColorType": "visualizationColors",
+                            "position": 4
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "fieldName": "rel_3m_vs_spy_pct",
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "0"
+                            },
+                            "operator": ">"
+                          },
+                          "backgroundColor": "#00A972"
+                        },
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "0"
+                            },
+                            "operator": "<"
+                          },
+                          "backgroundColor": {
+                            "themeColorType": "visualizationColors",
+                            "position": 4
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "fieldName": "volume_ratio"
+                  },
+                  {
+                    "fieldName": "above_ma200"
+                  },
+                  {
+                    "fieldName": "is_volatile"
+                  }
+                ],
+                "rowOrder": [
+                  {
+                    "by": "column",
+                    "field": {
+                      "index": 8
+                    }
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 12,
+            "height": 6
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "8927765e",
+      "displayName": "Alerts & Data Quality",
+      "layout": [
+        {
+          "widget": {
+            "name": "alerts-today",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "d81999c2",
+                  "fields": [
+                    {
+                      "name": "sum(alerts_today)",
+                      "expression": "SUM(`alerts_today`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Alerts today",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(alerts_today)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "alerts-7-days",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "d81999c2",
+                  "fields": [
+                    {
+                      "name": "sum(alerts_7d)",
+                      "expression": "SUM(`alerts_7d`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Alerts (7 days)",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(alerts_7d)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "dq-errors-last-run",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "c11367ad",
+                  "fields": [
+                    {
+                      "name": "sum(errors)",
+                      "expression": "SUM(`errors`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "DQ errors (last run)",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(errors)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "dq-warnings-last-run",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "c11367ad",
+                  "fields": [
+                    {
+                      "name": "sum(warnings)",
+                      "expression": "SUM(`warnings`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "DQ warnings (last run)",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(warnings)"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "alerts-per-day",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ef232e03",
+                  "fields": [
+                    {
+                      "name": "alert_type",
+                      "expression": "`alert_type`"
+                    },
+                    {
+                      "name": "daily(date)",
+                      "expression": "DATE_TRUNC(\"DAY\", `date`)"
+                    },
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(`*`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Alerts per day",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(date)",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "count(*)",
+                  "displayName": "Alerts",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "alert_type",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 12,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "alert-history",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ef232e03",
+                  "fields": [
+                    {
+                      "name": "date",
+                      "expression": "`date`"
+                    },
+                    {
+                      "name": "ticker",
+                      "expression": "`ticker`"
+                    },
+                    {
+                      "name": "alert_type",
+                      "expression": "`alert_type`"
+                    },
+                    {
+                      "name": "value_pct",
+                      "expression": "`value_pct`"
+                    },
+                    {
+                      "name": "threshold_pct",
+                      "expression": "`threshold_pct`"
+                    },
+                    {
+                      "name": "message",
+                      "expression": "`message`"
+                    }
+                  ],
+                  "disaggregated": true,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "`date`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Alert history",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "date"
+                  },
+                  {
+                    "fieldName": "ticker"
+                  },
+                  {
+                    "fieldName": "alert_type"
+                  },
+                  {
+                    "fieldName": "value_pct"
+                  },
+                  {
+                    "fieldName": "threshold_pct"
+                  },
+                  {
+                    "fieldName": "message"
+                  }
+                ],
+                "rowOrder": [
+                  {
+                    "by": "column-reversed",
+                    "field": {
+                      "index": 0
+                    }
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 12,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "90-day-correlation",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "686a5fdf",
+                  "fields": [
+                    {
+                      "name": "pair",
+                      "expression": "`pair`"
+                    },
+                    {
+                      "name": "monthly(date)",
+                      "expression": "DATE_TRUNC(\"MONTH\", `date`)"
+                    },
+                    {
+                      "name": "avg(corr_90d)",
+                      "expression": "AVG(`corr_90d`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "90-day correlation",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "monthly(date)",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(corr_90d)",
+                  "displayName": "Correlation",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "pair",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 4,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "last-dq-run",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "765ec642",
+                  "fields": [
+                    {
+                      "name": "check_name",
+                      "expression": "`check_name`"
+                    },
+                    {
+                      "name": "severity",
+                      "expression": "`severity`"
+                    },
+                    {
+                      "name": "status",
+                      "expression": "`status`"
+                    },
+                    {
+                      "name": "failed_count",
+                      "expression": "`failed_count`"
+                    },
+                    {
+                      "name": "run_at",
+                      "expression": "`run_at`"
+                    }
+                  ],
+                  "disaggregated": true,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "`run_at`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Last DQ run",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "check_name"
+                  },
+                  {
+                    "fieldName": "severity"
+                  },
+                  {
+                    "fieldName": "status"
+                  },
+                  {
+                    "fieldName": "failed_count"
+                  },
+                  {
+                    "fieldName": "run_at"
+                  }
+                ],
+                "rowOrder": [
+                  {
+                    "by": "column-reversed",
+                    "field": {
+                      "index": 4
+                    }
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 8,
+            "width": 8,
+            "height": 4
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "8cfdefd9",
+      "displayName": "Ticker detail",
+      "layout": [
+        {
+          "widget": {
+            "name": "cc431538",
+            "queries": [
+              {
+                "name": "dashboards/01f1db913b3315daaecbab42a3783636/datasets/01f1dbb381191900acedb71866d39e70_ticker",
+                "query": {
+                  "datasetName": "281d9035",
+                  "fields": [
+                    {
+                      "name": "ticker",
+                      "expression": "`ticker`"
+                    },
+                    {
+                      "name": "ticker_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f1db913b3315daaecbab42a3783636/datasets/01f1db91d08518e1870d674681cc81c2_ticker",
+                "query": {
+                  "datasetName": "ef232e03",
+                  "fields": [
+                    {
+                      "name": "ticker",
+                      "expression": "`ticker`"
+                    },
+                    {
+                      "name": "ticker_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "ticker",
+                    "queryName": "dashboards/01f1db913b3315daaecbab42a3783636/datasets/01f1dbb381191900acedb71866d39e70_ticker"
+                  },
+                  {
+                    "fieldName": "ticker",
+                    "queryName": "dashboards/01f1db913b3315daaecbab42a3783636/datasets/01f1db91d08518e1870d674681cc81c2_ticker"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 2,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "fad24069",
+            "queries": [
+              {
+                "name": "dashboards/01f1db913b3315daaecbab42a3783636/datasets/01f1dbb381191900acedb71866d39e70_date",
+                "query": {
+                  "datasetName": "281d9035",
+                  "fields": [
+                    {
+                      "name": "date",
+                      "expression": "`date`"
+                    },
+                    {
+                      "name": "date_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "date",
+                    "queryName": "dashboards/01f1db913b3315daaecbab42a3783636/datasets/01f1dbb381191900acedb71866d39e70_date"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 0,
+            "width": 4,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "price-vs-moving-averages",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "281d9035",
+                  "fields": [
+                    {
+                      "name": "daily(date)",
+                      "expression": "DATE_TRUNC(\"DAY\", `date`)"
+                    },
+                    {
+                      "name": "avg(price)",
+                      "expression": "AVG(`price`)"
+                    },
+                    {
+                      "name": "avg(ma50)",
+                      "expression": "AVG(`ma50`)"
+                    },
+                    {
+                      "name": "avg(ma200)",
+                      "expression": "AVG(`ma200`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Price vs moving averages",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(date)",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "fields": [
+                    {
+                      "fieldName": "avg(price)"
+                    },
+                    {
+                      "fieldName": "avg(ma50)"
+                    },
+                    {
+                      "fieldName": "avg(ma200)"
+                    }
+                  ]
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 12,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "drawdown-from-52w-high",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "281d9035",
+                  "fields": [
+                    {
+                      "name": "daily(date)",
+                      "expression": "DATE_TRUNC(\"DAY\", `date`)"
+                    },
+                    {
+                      "name": "avg(drawdown_52w_pct)",
+                      "expression": "AVG(`drawdown_52w_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Drawdown from 52W high",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(date)",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(drawdown_52w_pct)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "3m-performance-vs-sp500",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "281d9035",
+                  "fields": [
+                    {
+                      "name": "daily(date)",
+                      "expression": "DATE_TRUNC(\"DAY\", `date`)"
+                    },
+                    {
+                      "name": "avg(rel_3m_vs_spy_pct)",
+                      "expression": "AVG(`rel_3m_vs_spy_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "3M performance vs S&P 500",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(date)",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "avg(rel_3m_vs_spy_pct)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 5,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "volatility-vs-normal",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "281d9035",
+                  "fields": [
+                    {
+                      "name": "daily(date)",
+                      "expression": "DATE_TRUNC(\"DAY\", `date`)"
+                    },
+                    {
+                      "name": "avg(vol_20d_pct)",
+                      "expression": "AVG(`vol_20d_pct`)"
+                    },
+                    {
+                      "name": "avg(vol_baseline_pct)",
+                      "expression": "AVG(`vol_baseline_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Volatility vs normal",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(date)",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "fields": [
+                    {
+                      "fieldName": "avg(vol_20d_pct)"
+                    },
+                    {
+                      "fieldName": "avg(vol_baseline_pct)"
+                    }
+                  ]
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 10,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "alerts-for-ticker",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ef232e03",
+                  "fields": [
+                    {
+                      "name": "date",
+                      "expression": "`date`"
+                    },
+                    {
+                      "name": "alert_type",
+                      "expression": "`alert_type`"
+                    },
+                    {
+                      "name": "value_pct",
+                      "expression": "`value_pct`"
+                    },
+                    {
+                      "name": "message",
+                      "expression": "`message`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "Alerts for ticker",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "date"
+                  },
+                  {
+                    "fieldName": "alert_type"
+                  },
+                  {
+                    "fieldName": "value_pct"
+                  },
+                  {
+                    "fieldName": "message"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 10,
+            "width": 6,
+            "height": 5
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
