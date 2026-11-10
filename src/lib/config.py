@@ -11,8 +11,6 @@ def table(name: str) -> str:
 
 BRONZE_WATCHLIST = table("bronze_watchlist")
 BRONZE_PRICES = table("bronze_prices")
-BRONZE_CRYPTO = table("bronze_crypto")
-BRONZE_MACRO = table("bronze_macro")
 SILVER_PRICES = table("silver_prices")
 SILVER_WATCHLIST = table("silver_watchlist")
 SILVER_FX = table("silver_fx")

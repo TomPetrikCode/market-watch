@@ -68,8 +68,9 @@ All SQL is stored in the exported `.lvdash.json`.
   hide a stock that stopped updating.
 - **Daily grain on time-series charts** – the default monthly grouping averaged away exactly the spikes
   (drawdown, volatility) the charts are meant to show.
-- **AVG, not SUM, with a single-value ticker filter** – with one ticker AVG returns its exact value; without
-  the filter AVG still shows something sensible instead of adding prices of different tickers together.
+- **AVG, not SUM, with a single-value ticker filter** – with one ticker selected, AVG returns its exact value.
+  Always keep a ticker selected: with an empty filter the charts average all tickers together
+  (and weekends contain only crypto), which produces meaningless spikes.
 - **Colours only where the sign means something** – returns and relative performance are green/red;
   drawdown is always ≤ 0, so colouring it would make the whole column red.
 - **Limited history in datasets** (3 years for detail, 2 years for correlation) keeps charts readable and fast;
