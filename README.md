@@ -37,9 +37,9 @@ flowchart LR
         S3[silver_prices<br/>in USD]
     end
 
-    subgraph Gold["Gold · 20_gold_metrics, 40_alerts"]
-        G1[gold_metrics]
-        G2[gold_correlations]
+    subgraph Gold["Gold · 20 → 30 → 40"]
+        G1[gold_metrics<br/>gold_correlations]
+        DQ{30_dq_checks<br/>ERROR stops job}
         G3[gold_alerts]
     end
 
@@ -49,13 +49,10 @@ flowchart LR
     S2 -->|USD conversion| S3
     S1 --> G1
     S3 --> G1
-    G1 --> G2
-    G1 --> DQ{30_dq_checks<br/>ERROR stops job}
+    G1 --> DQ
     DQ -->|40_alerts| G3
     G3 --> AL[SQL Alert<br/>daily e-mail]
-    G1 --> DB[AI/BI Dashboard]
-    G2 --> DB
-    G3 --> DB
+    G3 --> DB[AI/BI Dashboard<br/>all gold tables]
 ```
 
 The whole pipeline runs as one **Lakeflow Job** every day at 23:15 (Europe/Prague), after the US close:
