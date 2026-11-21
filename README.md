@@ -23,33 +23,39 @@ and CI.
 
 ```mermaid
 flowchart LR
-    GS[Google Sheets<br/>watchlist + thresholds] --> B1
-    YF[Yahoo Finance<br/>daily prices + FX] --> B2
+    GS[Google Sheets<br/>watchlist + thresholds] -->|01_ingest_watchlist| B1
+    YF[Yahoo Finance<br/>daily prices + FX] -->|02_ingest_prices| B2
 
     subgraph Bronze
         B1[bronze_watchlist<br/>append snapshots]
         B2[bronze_prices<br/>incremental MERGE]
     end
 
-    subgraph Silver
+    subgraph Silver["Silver · 10_silver"]
         S1[silver_watchlist]
         S2[silver_fx]
         S3[silver_prices<br/>in USD]
     end
 
-    subgraph Gold
+    subgraph Gold["Gold · 20_gold_metrics, 40_alerts"]
         G1[gold_metrics]
         G2[gold_correlations]
         G3[gold_alerts]
     end
 
     B1 --> S1
-    B2 --> S2 & S3
-    S1 & S3 --> G1 --> G2
+    B2 --> S2
+    B2 --> S3
+    S2 -->|USD conversion| S3
+    S1 --> G1
+    S3 --> G1
+    G1 --> G2
     G1 --> DQ{30_dq_checks<br/>ERROR stops job}
-    DQ --> G3
+    DQ -->|40_alerts| G3
     G3 --> AL[SQL Alert<br/>daily e-mail]
-    G1 & G2 & G3 --> DB[AI/BI Dashboard]
+    G1 --> DB[AI/BI Dashboard]
+    G2 --> DB
+    G3 --> DB
 ```
 
 The whole pipeline runs as one **Lakeflow Job** every day at 23:15 (Europe/Prague), after the US close:
